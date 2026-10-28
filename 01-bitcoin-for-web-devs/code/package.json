@@ -1,0 +1,28 @@
+{
+  "name": "bobn-01-bitcoin-for-web-devs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Module 1 of Build on Bitcoin, Naija: keys, addresses and transactions on signet",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "new-wallet": "tsx src/1-new-wallet.ts",
+    "balance": "tsx src/2-balance.ts",
+    "send": "tsx src/3-send.ts",
+    "selftest": "tsx src/selftest.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bitcoinerlab/secp256k1": "^2.0.0",
+    "bitcoinjs-lib": "^7.0.5",
+    "ecpair": "^3.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
