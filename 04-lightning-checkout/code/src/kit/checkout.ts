@@ -1,9 +1,7 @@
 // The checkout itself: turn a cart into a locked-price Lightning invoice,
 // then watch it until it's paid or expired. The server is the only source of
 // truth for prices and for "paid". The browser never decides either.
-import { createHash, randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from "node:fs";
-import { dirname } from "node:path";
+// Runs in Node 20+ and in browsers: only Web Crypto and fetch, no Node modules.
 import type { CatalogItem, LightningBackend, Order, OrderLine, PublicOrder } from "./types.ts";
 import { RateService, nairaToSats } from "./rates.ts";
 
@@ -38,32 +36,34 @@ export function priceCart(input: unknown, catalog: CatalogItem[]): { lines: Orde
   return { lines, totalNaira };
 }
 
-export function verifyPreimage(preimageHex: string, paymentHashHex: string): boolean {
-  if (!/^[0-9a-f]{64}$/i.test(preimageHex) || !/^[0-9a-f]{64}$/i.test(paymentHashHex)) return false;
-  const h = createHash("sha256").update(Buffer.from(preimageHex, "hex")).digest("hex");
-  return h === paymentHashHex.toLowerCase();
+const toHex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+const fromHex = (h: string) => new Uint8Array(h.match(/../g)!.map((x) => parseInt(x, 16)));
+export const randomHex = (bytes: number) => toHex(crypto.getRandomValues(new Uint8Array(bytes)));
+export async function sha256Hex(hex: string): Promise<string> {
+  return toHex(new Uint8Array(await crypto.subtle.digest("SHA-256", fromHex(hex))));
 }
 
-/** Tiny order store: a Map, saved to a JSON file so a restart doesn't lose
- *  paid orders. Holds no names, phones or addresses: there is nothing
- *  personal to leak. Swap for your own database in production. */
-export class OrderStore {
+/** The preimage is the receipt: only a completed payment reveals it,
+ *  and its SHA-256 must equal the invoice's payment hash. */
+export async function verifyPreimage(preimageHex: string, paymentHashHex: string): Promise<boolean> {
+  if (!/^[0-9a-f]{64}$/i.test(preimageHex) || !/^[0-9a-f]{64}$/i.test(paymentHashHex)) return false;
+  return (await sha256Hex(preimageHex.toLowerCase())) === paymentHashHex.toLowerCase();
+}
+
+/** Where orders live. The kit ships a file store for Node (store-file.ts)
+ *  and a memory store; swap in your own database. Orders hold no names,
+ *  phones or addresses: there is nothing personal to leak. */
+export interface Store {
+  get(id: string): Order | undefined;
+  put(o: Order): void;
+}
+export class MemoryStore implements Store {
   private orders = new Map<string, Order>();
-  constructor(private file?: string) {
-    if (file && existsSync(file)) {
-      for (const o of JSON.parse(readFileSync(file, "utf8")) as Order[]) this.orders.set(o.id, o);
-    }
-  }
   get(id: string) {
     return this.orders.get(id);
   }
   put(o: Order) {
     this.orders.set(o.id, o);
-    if (!this.file) return;
-    mkdirSync(dirname(this.file), { recursive: true });
-    const tmp = this.file + ".tmp";
-    writeFileSync(tmp, JSON.stringify([...this.orders.values()], null, 1));
-    renameSync(tmp, this.file); // atomic replace
   }
 }
 
@@ -71,7 +71,7 @@ export interface CheckoutOptions {
   backend: LightningBackend;
   rates: RateService;
   catalog: CatalogItem[];
-  store: OrderStore;
+  store: Store;
   shopName: string;
   invoiceExpirySeconds?: number; // also the price lock
   log?: (event: string, fields: Record<string, string | number>) => void;
@@ -91,7 +91,7 @@ export class Checkout {
     const rate = await this.o.rates.get();
     const sats = nairaToSats(totalNaira, rate.nairaPerBtc);
     const expiry = this.o.invoiceExpirySeconds ?? 600;
-    const id = randomBytes(16).toString("hex"); // unguessable order id
+    const id = randomHex(16); // unguessable order id
     const inv = await this.o.backend.createInvoice({
       sats,
       description: `${this.o.shopName} order ${id.slice(0, 8)}`,
@@ -130,7 +130,7 @@ export class Checkout {
       const r = await this.o.backend.lookupInvoice(order.paymentHash);
       if (r.settled) {
         // A wallet's word isn't enough: the preimage must hash to our payment hash.
-        if (r.preimage && !verifyPreimage(r.preimage, order.paymentHash)) {
+        if (r.preimage && !(await verifyPreimage(r.preimage, order.paymentHash))) {
           this.log("preimage_mismatch", { order: id });
           throw new CheckoutError("payment proof did not verify", 502);
         }

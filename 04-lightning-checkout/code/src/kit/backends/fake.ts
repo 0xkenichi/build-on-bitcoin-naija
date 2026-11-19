@@ -1,6 +1,6 @@
 // Offline backend for tests and for learning the flow without any network.
 // Invoices are NOT real and can't be paid by a wallet; call settle() to simulate.
-import { createHash, randomBytes } from "node:crypto";
+import { randomHex, sha256Hex } from "../checkout.ts";
 import type { LightningBackend } from "../types.ts";
 
 export class FakeBackend implements LightningBackend {
@@ -8,8 +8,8 @@ export class FakeBackend implements LightningBackend {
   private invoices = new Map<string, { preimage: string; settledAt?: number }>();
 
   async createInvoice(req: { sats: number; description: string; expirySeconds: number }) {
-    const preimage = randomBytes(32).toString("hex");
-    const paymentHash = createHash("sha256").update(Buffer.from(preimage, "hex")).digest("hex");
+    const preimage = randomHex(32);
+    const paymentHash = await sha256Hex(preimage);
     this.invoices.set(paymentHash, { preimage });
     return { bolt11: `lntbfake${req.sats}n1${paymentHash.slice(0, 40)}`, paymentHash };
   }

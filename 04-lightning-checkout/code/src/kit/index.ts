@@ -1,5 +1,7 @@
 // Naija Checkout: public entry point.
-export { Checkout, CheckoutError, OrderStore, priceCart, verifyPreimage } from "./checkout.ts";
+export { Checkout, CheckoutError, MemoryStore, priceCart, verifyPreimage } from "./checkout.ts";
+export type { Store } from "./checkout.ts";
+export { OrderStore } from "./store-file.ts";
 export { RateService, nairaToSats, formatNaira } from "./rates.ts";
 export { checkoutRoutes, RateLimiter } from "./http.ts";
 export { NwcBackend } from "./backends/nwc.ts";

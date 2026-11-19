@@ -10,11 +10,40 @@ type Order = {
   rate: { nairaPerBtc: number; source: string; fetchedAt: number; stale: boolean };
   bolt11: string; paymentHash: string; preimage?: string; paidAt?: number;
 };
+/** How the widget talks to the shop. Default: HTTP to the kit's routes. */
+export type Transport = {
+  create(cart: { id: string; qty: number }[]): Promise<Order>;
+  get(id: string): Promise<Order>;
+  demoPay?(id: string): Promise<void>;
+};
+export class HttpError extends Error { constructor(msg: string, public status: number) { super(msg); } }
+export function httpTransport(apiBase = "", demo = false): Transport {
+  const api = apiBase + "/api";
+  const t: Transport = {
+    async create(cart) {
+      const r = await fetch(`${api}/orders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cart }) });
+      const j = await r.json();
+      if (!r.ok) throw new HttpError(j.error ?? "could not start checkout", r.status);
+      return j as Order;
+    },
+    async get(id) {
+      const r = await fetch(`${api}/orders/${id}`, { cache: "no-store" });
+      if (!r.ok) throw new HttpError("busy", r.status);
+      return (await r.json()) as Order;
+    },
+  };
+  if (demo) t.demoPay = async (id) => {
+    const r = await fetch(`${apiBase}/demo/pay/${id}`, { method: "POST" });
+    if (!r.ok) throw new Error("demo payment failed");
+  };
+  return t;
+}
 export type OpenOptions = {
   cart: { id: string; qty: number }[];
   shopName: string;
   apiBase?: string;
   demo?: boolean; // show the "demo buyer wallet" button (test sats only)
+  transport?: Transport; // default: httpTransport(apiBase, demo)
   onPaid?: (order: Order) => void;
   onClose?: () => void;
 };
@@ -62,7 +91,7 @@ async function sha256Hex(hex: string): Promise<string> {
 }
 
 export function open(opts: OpenOptions) {
-  const api = (opts.apiBase ?? "") + "/api";
+  const transport = opts.transport ?? httpTransport(opts.apiBase ?? "", opts.demo);
   const dialog = el("dialog", { class: "nc-sheet", "aria-label": "Pay with Bitcoin Lightning" });
   const body = el("div", { class: "nc-body", "aria-live": "polite" });
   const close = el("button", { class: "nc-close", type: "button", "aria-label": "Close" }, "×");
@@ -87,12 +116,7 @@ export function open(opts: OpenOptions) {
   async function create() {
     show(el("p", { class: "nc-loading" }, "Getting today's price…"));
     try {
-      const r = await fetch(`${api}/orders`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cart: opts.cart }),
-      });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error ?? "could not start checkout");
-      order = j as Order;
+      order = await transport.create(opts.cart);
       renderPending(order);
       poll();
     } catch (e) {
@@ -108,10 +132,7 @@ export function open(opts: OpenOptions) {
     const delay = document.hidden ? 8000 : Math.min(2500 * 2 ** failures, 15000);
     timer = window.setTimeout(async () => {
       try {
-        const r = await fetch(`${api}/orders/${order!.id}`, { cache: "no-store" });
-        if (r.status === 404) throw new Error("order not found");
-        if (!r.ok) throw new Error("busy");
-        const o = (await r.json()) as Order;
+        const o = await transport.get(order!.id);
         failures = 0;
         status.textContent = "Waiting for payment…";
         if (o.status === "paid") return renderPaid(o);
@@ -176,12 +197,12 @@ export function open(opts: OpenOptions) {
     nwcBox.append(nwcInput, nwcPay, nwcNote);
 
     let demoBtn: HTMLElement | null = null;
-    if (opts.demo) {
+    if (transport.demoPay) {
       demoBtn = el("button", { class: "nc-btn nc-demo", type: "button" }, "Demo: pay from test buyer wallet");
       demoBtn.addEventListener("click", async () => {
         demoBtn!.setAttribute("disabled", "");
-        const r = await fetch(`/demo/pay/${o.id}`, { method: "POST" });
-        status.textContent = r.ok ? "Test payment sent. Confirming…" : "Demo payment failed";
+        try { await transport.demoPay!(o.id); status.textContent = "Test payment sent. Confirming…"; }
+        catch { status.textContent = "Demo payment failed, try again"; demoBtn!.removeAttribute("disabled"); }
         failures = 0;
       });
     }

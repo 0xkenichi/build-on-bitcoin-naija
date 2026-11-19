@@ -11,7 +11,7 @@ export class PhoenixdBackend implements LightningBackend {
 
   constructor(private baseUrl: string, password: string, private fetchImpl: typeof fetch = fetch) {
     this.baseUrl = baseUrl.replace(/\/$/, "");
-    this.auth = "Basic " + Buffer.from(":" + password).toString("base64");
+    this.auth = "Basic " + btoa(":" + password);
   }
 
   async createInvoice(req: { sats: number; description: string; expirySeconds: number }) {

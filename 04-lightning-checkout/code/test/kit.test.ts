@@ -45,12 +45,12 @@ test("rates: bad numbers and wild jumps are rejected, fallback is marked stale",
   assert.match(c.source, /fallback/);
 });
 
-test("preimage check", () => {
+test("preimage check", async () => {
   const pre = "00".repeat(32);
   const hash = "66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925"; // sha256(32 zero bytes)
-  assert.equal(verifyPreimage(pre, hash), true);
-  assert.equal(verifyPreimage("11".repeat(32), hash), false);
-  assert.equal(verifyPreimage("nope", hash), false);
+  assert.equal(await verifyPreimage(pre, hash), true);
+  assert.equal(await verifyPreimage("11".repeat(32), hash), false);
+  assert.equal(await verifyPreimage("nope", hash), false);
 });
 
 test("order flow: pending -> paid, with a locked price and verified proof", async () => {
@@ -66,7 +66,7 @@ test("order flow: pending -> paid, with a locked price and verified proof", asyn
   await new Promise((r) => setTimeout(r, 2100)); // lookups are throttled to one per 2s
   const paid = await co.status(o.id);
   assert.equal(paid.status, "paid");
-  assert.ok(verifyPreimage(paid.preimage!, paid.paymentHash));
+  assert.ok(await verifyPreimage(paid.preimage!, paid.paymentHash));
 });
 
 test("order flow: unpaid order expires, with one last check first", async () => {
@@ -154,4 +154,21 @@ test("phoenixd adapter speaks the documented API", async () => {
   assert.equal(l.settledAt, 1_700_000_000);
   assert.match(calls[0], /^POST http:\/\/127\.0\.0\.1:9740\/createinvoice Basic /);
   await assert.rejects(p.lookupInvoice("../x"), /bad payment hash/);
+});
+
+test("NWC: a shop connection that can spend is refused (least privilege)", async () => {
+  const { NwcBackend } = await import("../src/kit/backends/nwc.ts");
+  const url = "nostr+walletconnect://" + "ab".repeat(32) + "?relay=wss://relay.example&secret=" + "cd".repeat(32);
+  const stub = (methods: string[]) => ({ getInfo: async () => ({ methods }), close() {} });
+  const strict = new NwcBackend(url);
+  (strict as unknown as { client: unknown }).client = stub(["make_invoice", "lookup_invoice", "pay_invoice"]);
+  await assert.rejects(strict.checkPermissions(), /can SPEND/);
+  (strict as unknown as { client: unknown }).client = stub(["make_invoice", "lookup_invoice"]);
+  assert.deepEqual((await strict.checkPermissions()).canSpend, false);
+  (strict as unknown as { client: unknown }).client = stub(["lookup_invoice"]);
+  await assert.rejects(strict.checkPermissions(), /missing: make_invoice/);
+  const testOnly = new NwcBackend(url, { allowSpendPermissions: true });
+  (testOnly as unknown as { client: unknown }).client = stub(["make_invoice", "lookup_invoice", "pay_invoice"]);
+  assert.equal((await testOnly.checkPermissions()).canSpend, true);
+  assert.throws(() => new NwcBackend("https://not-nwc"), /must start with/);
 });
