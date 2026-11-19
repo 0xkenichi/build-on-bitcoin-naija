@@ -17,11 +17,19 @@ await ensureDemoEnv();
 loadEnv();
 
 const catalog = JSON.parse(readFileSync("src/demo/catalog.json", "utf8")) as CatalogItem[];
-const backend = backendFromEnv();
-if (backend instanceof NwcBackend) {
-  const p = await backend.checkPermissions();
-  if (p.canSpend) console.warn("WARNING: this NWC connection can spend. Fine for faucet test wallets, never for a real shop.");
-}
+const backend = await (async () => {
+  try {
+    const b = backendFromEnv();
+    if (b instanceof NwcBackend) {
+      const p = await b.checkPermissions();
+      if (p.canSpend) console.warn("  WARNING: this NWC connection can spend. Fine for faucet test wallets, never for a real shop.");
+    }
+    return b;
+  } catch (e) {
+    console.error(`\n  ✖ Refusing to start: ${(e as Error).message}\n`);
+    process.exit(1);
+  }
+})();
 const shopName = process.env.SHOP_NAME ?? "Yaba Thrift Corner";
 const checkout = new Checkout({
   backend,
