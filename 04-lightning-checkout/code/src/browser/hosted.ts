@@ -37,7 +37,7 @@ try {
     get: (id) => checkout.status(id),
     demoPay: async (id) => {
       const o = await checkout.status(id);
-      await buyer.payInvoice({ invoice: o.bolt11 });
+      return (await buyer.payInvoice({ invoice: o.bolt11 })).preimage;
     },
   };
   startShop(catalog, { shopName: "Yaba Thrift Corner", demo: true, transport });

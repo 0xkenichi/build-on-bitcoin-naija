@@ -4,6 +4,7 @@
 import { NWCClient } from "@getalby/sdk/nwc";
 import { createHash } from "node:crypto";
 import { loadEnv } from "./env.ts";
+import { paymentHashFromBolt11 } from "../src/kit/bolt11.ts";
 
 loadEnv();
 const base = process.env.SHOP_URL ?? `http://localhost:${process.env.PORT ?? 8787}`;
@@ -17,7 +18,9 @@ if (!r.ok) throw new Error(order.error);
 step(`1. order ${order.id.slice(0, 8)}: ₦${order.totalNaira.toLocaleString()} = ${order.sats} sats (rate from ${order.rate.source})`);
 
 const buyer = new NWCClient({ nostrWalletConnectUrl: process.env.BUYER_TEST_NWC_URL });
-await buyer.payInvoice({ invoice: order.bolt11 });
+const invoiceHash = paymentHashFromBolt11(order.bolt11);
+if (invoiceHash !== order.paymentHash) throw new Error("invoice hash doesn't match what the shop reported");
+const { preimage } = await buyer.payInvoice({ invoice: order.bolt11 });
 buyer.close();
 step("2. buyer wallet paid the invoice over Nostr Wallet Connect");
 
@@ -27,7 +30,10 @@ for (let i = 0; i < 20 && o.status === "pending"; i++) {
   o = await (await fetch(`${base}/api/orders/${order.id}`)).json();
 }
 if (o.status !== "paid") throw new Error(`order is ${o.status}, expected paid`);
-const ok = createHash("sha256").update(Buffer.from(o.preimage, "hex")).digest("hex") === o.paymentHash;
-step(`3. shop says PAID; proof ${ok ? "verified" : "FAILED"} (sha256(preimage) == payment hash)`);
+const sha = (h: string) => createHash("sha256").update(Buffer.from(h, "hex")).digest("hex");
+const buyerOk = sha(preimage) === invoiceHash; // the buyer's own proof, hash decoded from the invoice
+const shopOk = o.proofVerified === true && sha(o.preimage) === invoiceHash;
+const ok = buyerOk && shopOk;
+step(`3. shop says PAID; buyer's proof ${buyerOk ? "verified" : "FAILED"}, shop's proof ${shopOk ? "verified" : "FAILED"} (sha256(preimage) == invoice hash)`);
 console.log(`\n  E2E ${ok ? "PASSED" : "FAILED"} in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 process.exit(ok ? 0 : 1);

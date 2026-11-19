@@ -15,7 +15,7 @@
 |---|---|---|---|---|
 | 1 | Buyer edits the page to pay ₦9 instead of ₦9,000 | Browser sends only item ids and quantities; prices come from the server catalog; quantity 1–10, at most 20 lines | `priceCart` in `checkout.ts` | ✓ |
 | 2 | Buyer fakes the success screen | "Paid" is set only by the server after asking the vendor's wallet | `Checkout.status` | ✓ |
-| 3 | A buggy or hostile wallet backend says "paid" when it wasn't | Server checks SHA-256(preimage) = payment hash before marking paid; the buyer's phone checks it again | `verifyPreimage`, `checkout.ts` (browser) | ✓ |
+| 3 | A buggy or misconfigured wallet backend says "paid" when it wasn't, or hands back an invoice that doesn't match | Server reads the payment hash out of the bolt11 itself and refuses a mismatch; when the wallet returns a preimage, the server checks SHA-256(preimage) = that hash, otherwise the order is marked `proofVerified: false`. This can't catch a dishonest *receiver* (the receiving wallet always knows its preimage), so the buyer's phone checks the preimage **its own wallet** returned against the hash decoded from the invoice it paid | `bolt11.ts`, `verifyPreimage`, `checkout.ts` (browser) | ✓ |
 | 4 | Shop credentials leak (stolen server, committed `.env`) | Receive-only permissions: an attacker can create invoices but can't move the vendor's money. `.env` is git-ignored and written with mode 600 | `nwc.ts`, `faucet.ts` | ✓ (permission check) |
 | 5 | Bot floods the shop with orders (spams the vendor's wallet with invoices) | 10 new orders per IP per minute; request body capped at 8 KB; JSON only | `http.ts` | ✓ |
 | 6 | Polling storms hammer the wallet | At most one wallet lookup per order every 2 s, whatever the number of pollers; clients back off on errors | `Checkout.status`, browser `poll()` | ✓ |
@@ -28,7 +28,7 @@
 | 13 | Path traversal on the demo's static file server | Paths are normalised and must stay inside `public/`; only listed file types are served | `server.ts` | manual |
 | 14 | Demo payment button left on in production | Off unless `DEMO_MODE=1` and a test buyer wallet are both set; only pays pending orders this server created | `server.ts` | manual |
 
-"✓" means covered by `npm run selftest` (13 offline tests) or `npm run e2e`.
+"✓" means covered by `npm run selftest` (16 offline tests) or `npm run e2e`.
 
 ## Known gaps
 - **Refunds are manual** (the vendor pays the buyer back from their own wallet). Module 6 adds refund states.

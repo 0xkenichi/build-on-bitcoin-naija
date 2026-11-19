@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { Checkout, OrderStore, RateService, FakeBackend, PhoenixdBackend, priceCart, nairaToSats, verifyPreimage, checkoutRoutes, RateLimiter } from "../src/kit/index.ts";
 import type { CatalogItem } from "../src/kit/index.ts";
+import { paymentHashFromBolt11, fakeBolt11 } from "../src/kit/bolt11.ts";
 
 const catalog: CatalogItem[] = [
   { id: "hat", name: "Hat", note: "", priceNaira: 2500, emoji: "" },
@@ -85,7 +86,7 @@ test("order flow: unpaid order expires, with one last check first", async () => 
 });
 
 test("a wallet that lies about payment is caught", async () => {
-  const liar = { name: "liar", createInvoice: async () => ({ bolt11: "x", paymentHash: "ab".repeat(32) }), lookupInvoice: async () => ({ settled: true, preimage: "cd".repeat(32) }) };
+  const liar = { name: "liar", createInvoice: async () => ({ bolt11: fakeBolt11("ab".repeat(32)), paymentHash: "ab".repeat(32) }), lookupInvoice: async () => ({ settled: true, preimage: "cd".repeat(32) }) };
   const co = new Checkout({ backend: liar, rates: rates(), catalog, store: new OrderStore(), shopName: "T", log: quiet });
   const o = await co.create([{ id: "hat", qty: 1 }]);
   await assert.rejects(co.status(o.id), /did not verify/);
@@ -171,4 +172,39 @@ test("NWC: a shop connection that can spend is refused (least privilege)", async
   (testOnly as unknown as { client: unknown }).client = stub(["make_invoice", "lookup_invoice", "pay_invoice"]);
   assert.equal((await testOnly.checkPermissions()).canSpend, true);
   assert.throws(() => new NwcBackend("https://not-nwc"), /must start with/);
+});
+
+// A real invoice from an NWC Faucet test wallet (19 Nov 2026), with its payment hash.
+const REAL = "lnbc106210n1p407w2rdp4t9skycfq2358y6txwssyxmmjdejhygr0wfjx2u3q8qurjvtzxpjnwnp4qwmtpr4p72ms7gnq3pkfk2876y2msvl33s3840dlp6xsv2w59dpscpp55dslvz7j96pjveg6jh8ylz3ken43k5q8kuqhxmv6g052c45a2ylqsp505djn2cewp4tmn9d9g35ulcck66hfk8qz08cjqrxq0dxey6t0nps9qyysgqcqzp2xqzjcvvz327rphj2u03469wqd4pv0v7shh2afltdzmu6xv86n08yfl374np57l99sxgx2cwgt62th4uycjmrvvms6mt0hvmz0456f4ak09yqq34r5d6";
+const REAL_HASH = "a361f60bd22e8326651a95ce4f8a36cceb1b5007b701736d9a43e8ac569d513e";
+
+test("bolt11: payment hash read from a real invoice; corrupted invoices are refused", () => {
+  assert.equal(paymentHashFromBolt11(REAL), REAL_HASH);
+  assert.equal(paymentHashFromBolt11("lightning:" + REAL.toUpperCase()), REAL_HASH);
+  assert.throws(() => paymentHashFromBolt11(REAL.slice(0, -1) + (REAL.endsWith("q") ? "p" : "q")), /checksum/);
+  assert.throws(() => paymentHashFromBolt11("hello"), /not a BOLT11/);
+  const h = "12".repeat(32);
+  assert.equal(paymentHashFromBolt11(fakeBolt11(h)), h);
+});
+
+test("a backend whose invoice doesn't match its payment hash is refused", async () => {
+  const mixed = { name: "mixed", createInvoice: async () => ({ bolt11: fakeBolt11("ab".repeat(32)), paymentHash: "cd".repeat(32) }), lookupInvoice: async () => ({ settled: false }) };
+  const co = new Checkout({ backend: mixed, rates: rates(), catalog, store: new OrderStore(), shopName: "T", log: quiet });
+  await assert.rejects(co.create([{ id: "hat", qty: 1 }]), /doesn't match/);
+});
+
+test("paid without a preimage is marked paid but NOT proof-verified", async () => {
+  let settled = false;
+  const nopre = { name: "nopre", createInvoice: async () => ({ bolt11: fakeBolt11("ab".repeat(32)), paymentHash: "ab".repeat(32) }), lookupInvoice: async () => ({ settled }) };
+  const co = new Checkout({ backend: nopre, rates: rates(), catalog, store: new OrderStore(), shopName: "T", log: quiet });
+  const o = await co.create([{ id: "hat", qty: 1 }]);
+  settled = true;
+  const p = await co.status(o.id);
+  assert.equal(p.status, "paid");
+  assert.equal(p.proofVerified, false);
+  const fb = new FakeBackend();
+  const co2 = new Checkout({ backend: fb, rates: rates(), catalog, store: new OrderStore(), shopName: "T", log: quiet });
+  const o2 = await co2.create([{ id: "hat", qty: 1 }]);
+  fb.settle(o2.paymentHash);
+  assert.equal((await co2.status(o2.id)).proofVerified, true);
 });

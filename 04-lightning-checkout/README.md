@@ -33,7 +33,7 @@ Open the shop on your phone or in a narrow browser window. Add a couple of items
 
 Two more checks:
 ```bash
-npm run selftest      # 13 offline tests: pricing, rates, expiry, fake-payment detection, HTTP limits
+npm run selftest      # 16 offline tests: pricing, rates, expiry, fake-payment detection, HTTP limits
 npm run e2e           # live: create an order, pay it over NWC, wait for "paid", verify the proof
 ```
 NWC talks through public Nostr relays. If a step times out once, run it again.
@@ -46,13 +46,14 @@ NWC talks through public Nostr relays. If a step times out once, run it again.
 
 **3. The server decides "paid", never the browser.** The same trick works on the success screen. Your server asks the vendor's wallet whether the invoice was paid, and only then marks the order paid.
 
-**4. The preimage is the receipt.** Every invoice has a *payment hash*. When it's paid, the payer's wallet learns a secret 32-byte *preimage* whose SHA-256 equals that hash. Nobody can produce it without paying. The kit checks this on the server and again on the buyer's phone ("✓ Payment proof verified on this phone").
+**4. The preimage is the receipt.** Every invoice has a *payment hash*. When it's paid, the payer's wallet learns a secret 32-byte *preimage* whose SHA-256 equals that hash. Nobody but the payer (and the receiving wallet) learns it, and only once the payment completes. The kit checks it twice: the server checks the preimage the vendor's wallet reports, and when the buyer pays from the page (NWC or WebLN), the buyer's phone checks the preimage **its own wallet** got back against the hash it decodes from the invoice ("✓ Payment proof verified on this phone"). The second check is the one that protects the buyer, because it doesn't trust the shop at all.
 
 ## How the kit fits together
 
 | File | What it does |
 |---|---|
 | `src/kit/checkout.ts` | Prices the cart from your catalog, locks the rate, creates the invoice, tracks the order: `pending` → `paid` or `expired` |
+| `src/kit/bolt11.ts` | Reads the payment hash out of a Lightning invoice (bech32, checksum checked) in about 40 lines, no library |
 | `src/kit/rates.ts` | Naira rate from CoinGecko, then Yadio. 60-second cache, sanity bounds, refuses a jump of more than 25%, falls back to the last good rate and labels it "may be out of date" |
 | `src/kit/backends/nwc.ts` | Vendor's wallet over Nostr Wallet Connect (Alby Hub, Coinos, LNbits and others). Refuses connections that can spend |
 | `src/kit/backends/phoenixd.ts` | Vendor's own [phoenixd](https://phoenix.acinq.co/server) node over its HTTP API |
@@ -95,7 +96,7 @@ In the page:
 4. Test with a ₦200 item before you announce it.
 
 ## Built for Nigerian phones and data
-- **The shop page is about 14 KB gzipped** (HTML, CSS and JavaScript, measured by `npm run build`). The static live demo is bigger (about 52 KB) because the server part and the NWC library ride along in the page. No web fonts, no images, no framework. The NWC code (38 KB) only downloads if the buyer chooses NWC.
+- **The shop page is about 15 KB gzipped** (HTML, CSS and JavaScript, measured by `npm run build`). The static live demo is bigger (about 52 KB) because the server part and the NWC library ride along in the page. No web fonts, no images, no framework. The NWC code (38 KB) only downloads if the buyer chooses NWC.
 - **"Open wallet app" first.** On a phone you can't scan a QR code on your own screen, so the main button opens the wallet directly.
 - **Bad network handling.** Status checks back off when the network fails, slow down when the tab is hidden, and say "You're offline" instead of spinning forever. The server asks the wallet at most once every 2 seconds per order, however many tabs are polling.
 - **48 px touch targets**, readable at 360 px wide, and the payment sheet slides up from the bottom like the apps buyers already use.

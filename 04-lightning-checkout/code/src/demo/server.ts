@@ -82,8 +82,9 @@ const server = createServer(async (req, res) => {
     try {
       const order = await checkout.status(pay[1]);
       if (order.status !== "pending") throw new Error("order is not pending");
-      await buyer.payInvoice({ invoice: order.bolt11 });
-      res.writeHead(200, { "Content-Type": "application/json" }).end('{"ok":true}');
+      const paid = await buyer.payInvoice({ invoice: order.bolt11 });
+      // Returned to the page as the "buyer's phone" would see it.
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ ok: true, preimage: paid.preimage }));
     } catch (e) {
       res.writeHead(400, { "Content-Type": "application/json" }).end(JSON.stringify({ error: String((e as Error).message).slice(0, 120) }));
     }
@@ -107,10 +108,18 @@ const server = createServer(async (req, res) => {
       c = { raw, gz: gzipSync(raw, { level: 9 }), mtime };
       cache.set(file, c);
     }
+    // Revalidate every time but answer 304 when unchanged: tiny on slow data,
+    // and buyers never run an old checkout after you update it.
+    const lastModified = new Date(Math.floor(mtime / 1000) * 1000).toUTCString();
+    if (req.headers["if-modified-since"] === lastModified) {
+      res.writeHead(304, { "Cache-Control": "no-cache", "Last-Modified": lastModified }).end();
+      return;
+    }
     const gz = /\bgzip\b/.test(String(req.headers["accept-encoding"] ?? ""));
     res.writeHead(200, {
       "Content-Type": type,
-      "Cache-Control": path.startsWith("/dist/") ? "public, max-age=3600" : "no-cache",
+      "Cache-Control": "no-cache",
+      "Last-Modified": lastModified,
       ...(gz ? { "Content-Encoding": "gzip", Vary: "Accept-Encoding" } : {}),
     });
     res.end(gz ? c.gz : c.raw);

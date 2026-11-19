@@ -2,19 +2,20 @@
 //   NaijaCheckout.open({ cart: [{ id: "denim-jacket", qty: 1 }], shopName: "My Shop" })
 // No framework. Holds no secrets. The server decides price and "paid".
 import qrcode from "qrcode-generator";
+import { paymentHashFromBolt11 } from "../kit/bolt11.ts";
 
 type Line = { id: string; name: string; qty: number; priceNaira: number };
 type Order = {
   id: string; createdAt: number; expiresAt: number; status: "pending" | "paid" | "expired";
   lines: Line[]; totalNaira: number; sats: number;
   rate: { nairaPerBtc: number; source: string; fetchedAt: number; stale: boolean };
-  bolt11: string; paymentHash: string; preimage?: string; paidAt?: number;
+  bolt11: string; paymentHash: string; preimage?: string; proofVerified?: boolean; paidAt?: number;
 };
 /** How the widget talks to the shop. Default: HTTP to the kit's routes. */
 export type Transport = {
   create(cart: { id: string; qty: number }[]): Promise<Order>;
   get(id: string): Promise<Order>;
-  demoPay?(id: string): Promise<void>;
+  demoPay?(id: string): Promise<string | undefined>; // returns the paying wallet's preimage
 };
 export class HttpError extends Error { constructor(msg: string, public status: number) { super(msg); } }
 export function httpTransport(apiBase = "", demo = false): Transport {
@@ -35,6 +36,7 @@ export function httpTransport(apiBase = "", demo = false): Transport {
   if (demo) t.demoPay = async (id) => {
     const r = await fetch(`${apiBase}/demo/pay/${id}`, { method: "POST" });
     if (!r.ok) throw new Error("demo payment failed");
+    return ((await r.json()) as { preimage?: string }).preimage;
   };
   return t;
 }
@@ -100,6 +102,9 @@ export function open(opts: OpenOptions) {
   dialog.showModal();
 
   let order: Order | undefined;
+  // The preimage the BUYER'S OWN wallet got back when it paid. Only the payer
+  // learns it by paying, so it's the buyer's proof, independent of the shop.
+  let buyerPreimage: string | undefined;
   let timer: number | undefined;
   let tick: number | undefined;
   let failures = 0;
@@ -117,6 +122,8 @@ export function open(opts: OpenOptions) {
     show(el("p", { class: "nc-loading" }, "Getting today's price…"));
     try {
       order = await transport.create(opts.cart);
+      // Check the invoice itself: its embedded payment hash must be the one the shop reported.
+      if (paymentHashFromBolt11(order.bolt11) !== order.paymentHash) throw new Error("the shop sent an invoice that doesn't match");
       renderPending(order);
       poll();
     } catch (e) {
@@ -166,7 +173,7 @@ export function open(opts: OpenOptions) {
       const b = el("button", { class: "nc-btn", type: "button" }, "Pay with browser wallet");
       b.addEventListener("click", async () => {
         b.setAttribute("disabled", "");
-        try { await window.webln!.enable(); await window.webln!.sendPayment(o.bolt11); status.textContent = "Payment sent. Confirming…"; failures = 0; }
+        try { await window.webln!.enable(); buyerPreimage = (await window.webln!.sendPayment(o.bolt11))?.preimage; status.textContent = "Payment sent. Confirming…"; failures = 0; }
         catch (e) { status.textContent = `Wallet said: ${(e as Error).message}`; b.removeAttribute("disabled"); }
       });
       actions.append(b);
@@ -186,7 +193,7 @@ export function open(opts: OpenOptions) {
       nwcPay.setAttribute("disabled", ""); nwcPay.textContent = "Paying…";
       try {
         const mod = await import(new URL("./nwc-pay.js", import.meta.url).href); // loaded only when needed
-        await mod.payWithNwc(url, o.bolt11);
+        buyerPreimage = await mod.payWithNwc(url, o.bolt11);
         nwcInput.value = "";
         status.textContent = "Payment sent. Confirming…"; failures = 0;
       } catch (e) {
@@ -201,7 +208,7 @@ export function open(opts: OpenOptions) {
       demoBtn = el("button", { class: "nc-btn nc-demo", type: "button" }, "Demo: pay from test buyer wallet");
       demoBtn.addEventListener("click", async () => {
         demoBtn!.setAttribute("disabled", "");
-        try { await transport.demoPay!(o.id); status.textContent = "Test payment sent. Confirming…"; }
+        try { buyerPreimage = await transport.demoPay!(o.id); status.textContent = "Test payment sent. Confirming…"; }
         catch { status.textContent = "Demo payment failed, try again"; demoBtn!.removeAttribute("disabled"); }
         failures = 0;
       });
@@ -258,10 +265,13 @@ export function open(opts: OpenOptions) {
       el("div", { class: "nc-actions" }, wa, save),
       done,
     );
-    // Anyone can check this: the preimage is only revealed when the payment
-    // completes, and its SHA-256 must equal the invoice's payment hash.
-    if (o.preimage && (await sha256Hex(o.preimage)) === o.paymentHash) proof.textContent = "✓ Payment proof verified on this phone";
-    else proof.textContent = "Payment confirmed by the shop's wallet";
+    // The buyer's proof: the preimage their own wallet received must hash to
+    // the payment hash written inside the invoice they paid (decoded here, not
+    // taken from the server). Paid by QR or another app? Then the shop's
+    // wallet confirmed it, and the buyer's wallet app keeps its own proof.
+    const invoiceHash = paymentHashFromBolt11(o.bolt11);
+    if (buyerPreimage && (await sha256Hex(buyerPreimage)) === invoiceHash) proof.textContent = "✓ Payment proof verified on this phone";
+    else proof.textContent = "✓ Confirmed by the shop's wallet. Your wallet app keeps the payment proof.";
     opts.onPaid?.(o);
   }
 

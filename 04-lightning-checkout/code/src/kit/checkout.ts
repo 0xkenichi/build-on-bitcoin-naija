@@ -4,6 +4,7 @@
 // Runs in Node 20+ and in browsers: only Web Crypto and fetch, no Node modules.
 import type { CatalogItem, LightningBackend, Order, OrderLine, PublicOrder } from "./types.ts";
 import { RateService, nairaToSats } from "./rates.ts";
+import { paymentHashFromBolt11 } from "./bolt11.ts";
 
 export const MAX_QTY = 10;
 export const MAX_LINES = 20;
@@ -97,6 +98,11 @@ export class Checkout {
       description: `${this.o.shopName} order ${id.slice(0, 8)}`,
       expirySeconds: expiry,
     });
+    // Trust the invoice, not the backend's word: the hash inside the bolt11
+    // is what the buyer's wallet will pay against.
+    if (paymentHashFromBolt11(inv.bolt11) !== inv.paymentHash.toLowerCase()) {
+      throw new CheckoutError("wallet returned an invoice that doesn't match its payment hash", 502);
+    }
     const now = Date.now();
     const order: Order = {
       id,
@@ -129,16 +135,24 @@ export class Checkout {
       this.lastLookup.set(id, Date.now());
       const r = await this.o.backend.lookupInvoice(order.paymentHash);
       if (r.settled) {
-        // A wallet's word isn't enough: the preimage must hash to our payment hash.
-        if (r.preimage && !(await verifyPreimage(r.preimage, order.paymentHash))) {
-          this.log("preimage_mismatch", { order: id });
-          throw new CheckoutError("payment proof did not verify", 502);
+        // Check the wallet's preimage against the invoice's payment hash. This
+        // catches a buggy or misconfigured backend. It can't catch a dishonest
+        // receiver (the receiving wallet always knows its own preimage), which
+        // is why the buyer's phone also checks the preimage *its own* wallet got.
+        let proofVerified = false;
+        if (r.preimage) {
+          if (!(await verifyPreimage(r.preimage, order.paymentHash))) {
+            this.log("preimage_mismatch", { order: id });
+            throw new CheckoutError("payment proof did not verify", 502);
+          }
+          proofVerified = true;
         }
         order.status = "paid";
         order.preimage = r.preimage;
+        order.proofVerified = proofVerified;
         order.paidAt = r.settledAt ? r.settledAt * 1000 : Date.now();
         this.o.store.put(order);
-        this.log("order_paid", { order: id, sats: order.sats });
+        this.log("order_paid", { order: id, sats: order.sats, proof: proofVerified ? "verified" : "none_from_wallet" });
         return toPublic(order);
       }
     }
@@ -152,6 +166,6 @@ export class Checkout {
 }
 
 function toPublic(o: Order): PublicOrder {
-  const { id, createdAt, expiresAt, status, lines, totalNaira, sats, rate, bolt11, paymentHash, preimage, paidAt } = o;
-  return { id, createdAt, expiresAt, status, lines, totalNaira, sats, rate, bolt11, paymentHash, preimage, paidAt };
+  const { id, createdAt, expiresAt, status, lines, totalNaira, sats, rate, bolt11, paymentHash, preimage, proofVerified, paidAt } = o;
+  return { id, createdAt, expiresAt, status, lines, totalNaira, sats, rate, bolt11, paymentHash, preimage, proofVerified, paidAt };
 }

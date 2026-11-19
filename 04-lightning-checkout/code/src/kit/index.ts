@@ -2,6 +2,7 @@
 export { Checkout, CheckoutError, MemoryStore, priceCart, verifyPreimage } from "./checkout.ts";
 export type { Store } from "./checkout.ts";
 export { OrderStore } from "./store-file.ts";
+export { paymentHashFromBolt11 } from "./bolt11.ts";
 export { RateService, nairaToSats, formatNaira } from "./rates.ts";
 export { checkoutRoutes, RateLimiter } from "./http.ts";
 export { NwcBackend } from "./backends/nwc.ts";

@@ -45,6 +45,8 @@ export interface Order {
   bolt11: string;
   paymentHash: string;
   preimage?: string;
+  /** true when the wallet returned a preimage whose SHA-256 is the invoice's payment hash */
+  proofVerified?: boolean;
   paidAt?: number; // unix ms
 }
 
@@ -53,5 +55,5 @@ export interface Order {
 export type PublicOrder = Pick<
   Order,
   | "id" | "createdAt" | "expiresAt" | "status" | "lines" | "totalNaira" | "sats"
-  | "rate" | "bolt11" | "paymentHash" | "preimage" | "paidAt"
+  | "rate" | "bolt11" | "paymentHash" | "preimage" | "proofVerified" | "paidAt"
 >;
