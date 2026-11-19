@@ -1,6 +1,6 @@
 # Module 4 video
 
-**Short demo (2½ minutes):** VIDEO_URL. The problem, the kit, a paid order in the demo shop on test sats, the tests and the threat model.
+**Short demo (2½ minutes):** [youtu.be/ay3Vm6uqH8Y](https://youtu.be/ay3Vm6uqH8Y). The problem, the kit, a paid order in the demo shop on test sats, the tests and the threat model.
 
 ## Full lesson outline (about 15 minutes, to record)
 1. **Hook, 0:00–1:00.** A shop site that ends with "send proof of transfer on WhatsApp". What if the site could confirm the payment itself?

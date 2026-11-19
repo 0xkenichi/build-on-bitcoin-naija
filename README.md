@@ -6,7 +6,7 @@ A free, open course for Nigerian web developers: add Bitcoin and Lightning payme
 
 **A drop-in Lightning checkout a Lagos web developer can add to a client's site in an afternoon.** Prices stay in naira, the buyer pays from any Lightning wallet, the vendor's money never passes through the developer, and the buyer gets a receipt they can send on WhatsApp.
 
-**Try it now on your phone:** [0xkenichi.github.io/naija-checkout](https://0xkenichi.github.io/naija-checkout/) (test sats only, about a minute end to end).
+**Try it now on your phone:** [0xkenichi.github.io/naija-checkout](https://0xkenichi.github.io/naija-checkout/) (test sats only, about a minute end to end). **Watch the 2½-minute demo:** [youtu.be/ay3Vm6uqH8Y](https://youtu.be/ay3Vm6uqH8Y).
 
 Or run it yourself:
 ```bash
