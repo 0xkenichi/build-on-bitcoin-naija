@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f3d2e">
+<title>Yaba Thrift Corner · demo shop</title>
+<link rel="stylesheet" href="/shop.css">
+<script type="module" src="/dist/shop.js"></script>
+</head>
+<body>
+<div class="demo-bar" role="note">Demo shop for <a href="https://github.com/0xkenichi/build-on-bitcoin-naija">Build on Bitcoin, Naija</a>. Test sats only, nothing here is for sale.</div>
+<header class="top">
+  <div>
+    <h1 id="shop-name">Yaba Thrift Corner</h1>
+    <p class="tag">Thrift finds from Yaba market. Pay in naira value with Bitcoin Lightning.</p>
+  </div>
+</header>
+<main>
+  <ul id="products" class="products" aria-label="Products"></ul>
+</main>
+<footer class="cart" id="cart" hidden>
+  <div class="cart-sum"><span id="cart-count">0 items</span><strong id="cart-total">₦0</strong></div>
+  <button id="pay" class="pay" type="button">Pay with ⚡ Lightning</button>
+</footer>
+<noscript><p class="noscript">This demo needs JavaScript.</p></noscript>
+</body>
+</html>

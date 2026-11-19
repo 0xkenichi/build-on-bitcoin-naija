@@ -1,0 +1,8 @@
+[
+  { "id": "denim-jacket", "name": "Vintage denim jacket", "note": "Size L, light wash", "priceNaira": 6500, "emoji": "🧥" },
+  { "id": "ankara-hat", "name": "Ankara bucket hat", "note": "Handmade in Yaba", "priceNaira": 2500, "emoji": "👒" },
+  { "id": "retro-jersey", "name": "Retro green football jersey", "note": "90s cut, size M", "priceNaira": 4000, "emoji": "👕" },
+  { "id": "sneakers", "name": "Thrifted white sneakers", "note": "Size 43, cleaned", "priceNaira": 7000, "emoji": "👟" },
+  { "id": "beads", "name": "Beaded bracelet", "note": "Coral and gold", "priceNaira": 1200, "emoji": "📿" },
+  { "id": "tote", "name": "Canvas tote bag", "note": "Fits a laptop", "priceNaira": 1800, "emoji": "👜" }
+]

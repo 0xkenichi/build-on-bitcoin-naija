@@ -1,0 +1,61 @@
+/* Mobile first. System fonts only: no font downloads on slow data. */
+:root {
+  --green: #0f3d2e; --green-2: #145a43; --orange: #f7931a; --ink: #14201b; --muted: #5d6b65;
+  --line: #e3e8e5; --bg: #f6f4ef; --card: #fff; --ok: #128a4a; --radius: 14px;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink); background: var(--bg); padding-bottom: 96px; }
+a { color: var(--green-2); }
+.demo-bar { background: #fff4e0; color: #6b4a00; font-size: 13px; padding: 8px 16px; text-align: center; }
+.top { background: var(--green); color: #fff; padding: 20px 16px 22px; }
+.top h1 { margin: 0; font-size: 24px; letter-spacing: -0.01em; }
+.tag { margin: 4px 0 0; color: #cfe3da; font-size: 14px; }
+main { max-width: 720px; margin: 0 auto; padding: 12px; }
+.products { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.product { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
+.pic { width: 64px; height: 64px; display: grid; place-items: center; font-size: 34px; background: #eef3f0; border-radius: 12px; }
+.info h2 { font-size: 16px; margin: 0; }
+.note { margin: 2px 0; font-size: 13px; color: var(--muted); }
+.price { margin: 0; font-weight: 700; }
+.add { min-height: 44px; min-width: 72px; border: 1.5px solid var(--green); color: var(--green); background: #fff; border-radius: 999px; font: inherit; font-weight: 600; padding: 0 14px; cursor: pointer; }
+.add.in { background: var(--green); color: #fff; font-size: 14px; }
+.cart { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid var(--line); padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); display: flex; gap: 12px; align-items: center; box-shadow: 0 -6px 20px rgba(0,0,0,.06); }
+.cart[hidden] { display: none; }
+.cart-sum { display: flex; flex-direction: column; font-size: 13px; color: var(--muted); }
+.cart-sum strong { font-size: 20px; color: var(--ink); }
+.pay { flex: 1; min-height: 50px; border: 0; border-radius: 12px; background: var(--orange); color: #1b1200; font: inherit; font-weight: 700; font-size: 17px; cursor: pointer; }
+@media (min-width: 640px) { .products { grid-template-columns: 1fr 1fr; } .cart { max-width: 720px; margin: 0 auto; border-radius: 16px 16px 0 0; } }
+
+/* ---- Checkout sheet (the reusable widget) ---- */
+.nc-sheet { border: 0; padding: 0; width: 100%; max-width: 440px; max-height: 100dvh; margin: auto auto 0; border-radius: 20px 20px 0 0; background: #fff; color: var(--ink); }
+.nc-sheet::backdrop { background: rgba(10, 25, 20, .55); }
+@media (min-width: 640px) { .nc-sheet { margin: auto; border-radius: 20px; } }
+.nc-body { padding: 22px 18px 20px; text-align: center; display: flex; flex-direction: column; gap: 10px; }
+.nc-close { position: absolute; top: 8px; right: 10px; width: 44px; height: 44px; border: 0; background: none; font-size: 28px; color: var(--muted); cursor: pointer; }
+.nc-shop { margin: 0; color: var(--muted); font-size: 14px; }
+.nc-total { margin: 0; font-size: 36px; font-weight: 800; letter-spacing: -0.02em; }
+.nc-sats { margin: -6px 0 0; color: var(--muted); font-size: 14px; }
+.nc-qrlink { display: block; margin: 4px auto 0; width: min(260px, 70vw); }
+.nc-qr { width: 100%; height: auto; display: block; border-radius: 10px; border: 1px solid var(--line); }
+.nc-lock { font-size: 13px; color: var(--green-2); font-weight: 600; }
+.nc-actions { display: grid; gap: 8px; }
+.nc-btn { display: flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 16px; border-radius: 12px; border: 1.5px solid var(--line); background: #fff; color: var(--ink); font: inherit; font-weight: 600; text-decoration: none; cursor: pointer; width: 100%; }
+.nc-btn[disabled] { opacity: .6; }
+.nc-primary { background: var(--orange); border-color: var(--orange); color: #1b1200; }
+.nc-demo { border-style: dashed; border-color: #c9a24a; background: #fffaf0; color: #6b4a00; }
+.nc-nwc { text-align: left; border: 1.5px solid var(--line); border-radius: 12px; padding: 0 12px; }
+.nc-nwc summary { min-height: 46px; display: flex; align-items: center; font-weight: 600; cursor: pointer; }
+.nc-nwc input { width: 100%; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; font: inherit; margin-bottom: 8px; }
+.nc-status { margin: 0; font-weight: 600; color: var(--green-2); min-height: 1.4em; }
+.nc-fine { margin: 0; font-size: 12px; color: var(--muted); }
+.nc-error { color: #b42318; font-weight: 600; }
+.nc-loading { padding: 40px 0; color: var(--muted); }
+.nc-tick { width: 64px; height: 64px; margin: 4px auto 0; border-radius: 50%; background: var(--ok); color: #fff; font-size: 36px; display: grid; place-items: center; }
+.nc-paid { margin: 0; font-size: 24px; }
+.nc-lines { list-style: none; margin: 4px 0 0; padding: 0; text-align: left; border-top: 1px dashed var(--line); }
+.nc-lines li, .nc-receipt-total { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px dashed var(--line); margin: 0; }
+.nc-receipt-total { font-weight: 800; font-size: 18px; }
+.nc-proof { margin: 0; font-size: 13px; font-weight: 600; color: var(--ok); }
+.noscript { padding: 16px; }
